@@ -1,0 +1,15 @@
+.spectra/
+openspec/.vector-search.db*
+
+# 環境變數與憑證（勿提交）
+.env
+.env.*
+!.env.example
+service-account.json
+*.token.json
+*-token.json
+token.json
+.interview-platform/
+credentials/
+node_modules/
+dist/
