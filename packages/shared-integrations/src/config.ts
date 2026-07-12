@@ -59,4 +59,16 @@ export function getBookingBaseUrl(): string {
   return requireEnv("BOOKING_BASE_URL");
 }
 
+export interface CalendarConfig {
+  serviceAccountKeyPath: string;
+  calendarId: string;
+}
+
+export function getCalendarConfig(): CalendarConfig {
+  return {
+    serviceAccountKeyPath: requireEnv("GOOGLE_SERVICE_ACCOUNT_KEY_PATH"),
+    calendarId: requireEnv("GOOGLE_CALENDAR_ID"),
+  };
+}
+
 export { requireEnv };

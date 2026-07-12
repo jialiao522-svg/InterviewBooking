@@ -111,11 +111,24 @@ export async function ensureGmailAuthorized(
   }
 }
 
-async function getGmailClient(config: GmailOAuthConfig = getGmailOAuthConfig()) {
-  if (!hasStoredToken(config)) {
-    throw new GmailAuthRequiredError(config.tokenPath);
+/**
+ * Local file takes priority (used by the recruit-agent CLI, which can run the
+ * interactive consent flow). Serverless environments like Vercel have no
+ * persistent disk, so they fall back to a refresh token supplied via env var.
+ */
+function resolveToken(config: GmailOAuthConfig): StoredGmailToken {
+  if (hasStoredToken(config)) {
+    return loadToken(config.tokenPath);
   }
-  const token = loadToken(config.tokenPath);
+  const envRefreshToken = process.env.GMAIL_OAUTH_REFRESH_TOKEN;
+  if (envRefreshToken) {
+    return { refresh_token: envRefreshToken };
+  }
+  throw new GmailAuthRequiredError(config.tokenPath);
+}
+
+async function getGmailClient(config: GmailOAuthConfig = getGmailOAuthConfig()) {
+  const token = resolveToken(config);
   const oauth2Client = createOAuthClient(config);
   oauth2Client.setCredentials(token);
   return google.gmail({ version: "v1", auth: oauth2Client });

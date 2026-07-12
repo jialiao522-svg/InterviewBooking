@@ -77,6 +77,7 @@ beforeEach(() => {
   mockGenerateAuthUrl.mockClear();
   mockSetCredentials.mockClear();
   mockGmailSend.mockReset();
+  delete process.env.GMAIL_OAUTH_REFRESH_TOKEN;
 });
 
 describe("hasStoredToken", () => {
@@ -96,6 +97,38 @@ describe("sendEmail without prior authorization", () => {
       sendEmail({ to: "a@example.com", subject: "hi", body: "hello" }, testConfig),
     ).rejects.toBeInstanceOf(GmailAuthRequiredError);
     expect(mockGmailSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendEmail token source", () => {
+  it("uses the local file token when one is stored", async () => {
+    storedFiles[testConfig.tokenPath] = JSON.stringify({ refresh_token: "file-refresh-token" });
+    mockGmailSend.mockResolvedValue({});
+
+    await sendEmail({ to: "a@example.com", subject: "hi", body: "hello" }, testConfig);
+
+    expect(mockSetCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh_token: "file-refresh-token" }),
+    );
+    expect(mockGmailSend).toHaveBeenCalled();
+  });
+
+  it("falls back to GMAIL_OAUTH_REFRESH_TOKEN when no local file token exists", async () => {
+    process.env.GMAIL_OAUTH_REFRESH_TOKEN = "env-refresh-token";
+    mockGmailSend.mockResolvedValue({});
+
+    await sendEmail({ to: "a@example.com", subject: "hi", body: "hello" }, testConfig);
+
+    expect(mockSetCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh_token: "env-refresh-token" }),
+    );
+    expect(mockGmailSend).toHaveBeenCalled();
+  });
+
+  it("throws GmailAuthRequiredError when neither a file token nor the env var is available", async () => {
+    await expect(
+      sendEmail({ to: "a@example.com", subject: "hi", body: "hello" }, testConfig),
+    ).rejects.toBeInstanceOf(GmailAuthRequiredError);
   });
 });
 
