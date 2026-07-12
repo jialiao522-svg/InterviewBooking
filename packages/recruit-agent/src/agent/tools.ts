@@ -4,12 +4,14 @@ import {
   readSheetRows,
   writeSheetTags,
   syncCandidatesToNotion,
+  getSheetsConfig,
 } from "@interview-platform/shared-integrations";
 
 export interface ToolDeps {
   readSheetRows: typeof readSheetRows;
   writeSheetTags: typeof writeSheetTags;
   syncCandidatesToNotion: typeof syncCandidatesToNotion;
+  getSheetsConfig: typeof getSheetsConfig;
   confirm: (message: string) => Promise<boolean>;
 }
 
@@ -27,6 +29,7 @@ export const defaultToolDeps: ToolDeps = {
   readSheetRows,
   writeSheetTags,
   syncCandidatesToNotion,
+  getSheetsConfig,
   confirm: defaultConfirm,
 };
 
@@ -79,7 +82,7 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
   {
     name: "sync_to_notion",
     description:
-      "將標記為主要招募對象的候選人同步到 Notion 資料庫，會建立新頁面或更新既有頁面。只有在使用者明確要求同步時才呼叫。",
+      "將標記為主要招募對象的候選人同步到 Notion 資料庫，會建立新頁面或更新既有頁面，並把候選人在 Sheet 上填寫的問卷回答整理寫入該頁面內文。只有在使用者明確要求同步時才呼叫。若本次對話是透過 sheet_name 讀取特定工作表的資料，同步時務必帶入相同的 sheet_name，避免讀到錯誤分頁的問卷回答。",
     input_schema: {
       type: "object",
       properties: {
@@ -96,6 +99,10 @@ export const TOOL_DEFINITIONS: Anthropic.Tool[] = [
             required: ["row_index", "name", "email", "reason"],
             additionalProperties: false,
           },
+        },
+        sheet_name: {
+          type: "string",
+          description: "要重新讀取問卷回答的 Google Sheet 工作表（分頁）名稱，應與讀取時使用的 sheet_name 一致。省略時使用預設設定的工作表。",
         },
       },
       required: ["candidates"],
@@ -116,6 +123,7 @@ interface WriteTagsInput {
 
 interface SyncToNotionInput {
   candidates: { row_index: number; name: string; email: string; reason: string }[];
+  sheet_name?: string;
 }
 
 export async function executeTool(
@@ -155,16 +163,47 @@ export async function executeTool(
     }
 
     case "sync_to_notion": {
-      const { candidates } = input as SyncToNotionInput;
-      const result = await deps.syncCandidatesToNotion(
-        candidates.map((candidate) => ({
+      const { candidates, sheet_name: sheetName } = input as SyncToNotionInput;
+
+      const { tagColumnHeader, reasonColumnHeader } = deps.getSheetsConfig();
+      const rows = await deps.readSheetRows(undefined, sheetName);
+      const rowsByIndex = new Map(rows.map((row) => [row.row_index, row]));
+
+      const syncInputs: Parameters<typeof deps.syncCandidatesToNotion>[0] = [];
+      const missingRowFailures: { sourceRowIndex: number; error: string }[] = [];
+
+      for (const candidate of candidates) {
+        const row = rowsByIndex.get(candidate.row_index);
+        if (!row) {
+          missingRowFailures.push({
+            sourceRowIndex: candidate.row_index,
+            error: `找不到列 ${candidate.row_index}，可能已從 Sheet 移除`,
+          });
+          continue;
+        }
+
+        const answers: Record<string, string> = {};
+        for (const [header, value] of Object.entries(row.columns)) {
+          if (header === tagColumnHeader || header === reasonColumnHeader) {
+            continue;
+          }
+          answers[header] = value;
+        }
+
+        syncInputs.push({
           sourceRowIndex: candidate.row_index,
           name: candidate.name,
           email: candidate.email,
           reason: candidate.reason,
-        })),
-      );
-      return JSON.stringify(result);
+          answers,
+        });
+      }
+
+      const result = await deps.syncCandidatesToNotion(syncInputs);
+      return JSON.stringify({
+        ...result,
+        failed: [...result.failed, ...missingRowFailures],
+      });
     }
 
     default:

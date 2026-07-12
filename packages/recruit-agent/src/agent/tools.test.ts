@@ -16,13 +16,30 @@ describe("TOOL_DEFINITIONS", () => {
     expect(writeTags?.strict).toBe(true);
     expect(syncToNotion?.strict).toBe(true);
   });
+
+  it("accepts an optional sheet_name on sync_to_notion, matching get_sheet_rows/write_tags", () => {
+    const syncToNotion = TOOL_DEFINITIONS.find((tool) => tool.name === "sync_to_notion");
+    const schema = syncToNotion?.input_schema as {
+      properties?: Record<string, unknown>;
+      required?: string[];
+    };
+    expect(schema.properties).toHaveProperty("sheet_name");
+    expect(schema.required).not.toContain("sheet_name");
+  });
 });
 
 function makeDeps(overrides: Partial<ToolDeps> = {}): ToolDeps {
   return {
-    readSheetRows: vi.fn(),
+    readSheetRows: vi.fn().mockResolvedValue([]),
     writeSheetTags: vi.fn(),
     syncCandidatesToNotion: vi.fn(),
+    getSheetsConfig: vi.fn().mockReturnValue({
+      serviceAccountKeyPath: "test-key.json",
+      sheetId: "test-sheet-id",
+      sheetRange: "Sheet1!A1:Z1000",
+      tagColumnHeader: "Tag",
+      reasonColumnHeader: "Reason",
+    }),
     confirm: vi.fn(),
     ...overrides,
   } as ToolDeps;
@@ -102,11 +119,24 @@ describe("executeTool: write_tags", () => {
 });
 
 describe("executeTool: sync_to_notion", () => {
-  it("maps candidate input to the shared-integrations shape", async () => {
+  it("maps candidate input to the shared-integrations shape, attaching questionnaire answers minus the Tag/Reason columns", async () => {
     const syncCandidatesToNotion = vi
       .fn()
       .mockResolvedValue({ created: 1, updated: 0, failed: [] });
-    const deps = makeDeps({ syncCandidatesToNotion });
+    const readSheetRows = vi.fn().mockResolvedValue([
+      {
+        row_index: 2,
+        columns: {
+          Name: "Alice",
+          Email: "alice@example.com",
+          Tag: "TRUE",
+          Reason: "matches",
+          "為什麼想參加這次訪談？": "想了解使用者研究方法",
+        },
+        current_tag: true,
+      },
+    ]);
+    const deps = makeDeps({ syncCandidatesToNotion, readSheetRows });
 
     const result = await executeTool(
       "sync_to_notion",
@@ -119,9 +149,100 @@ describe("executeTool: sync_to_notion", () => {
     );
 
     expect(syncCandidatesToNotion).toHaveBeenCalledWith([
-      { sourceRowIndex: 2, name: "Alice", email: "alice@example.com", reason: "matches" },
+      {
+        sourceRowIndex: 2,
+        name: "Alice",
+        email: "alice@example.com",
+        reason: "matches",
+        answers: {
+          Name: "Alice",
+          Email: "alice@example.com",
+          "為什麼想參加這次訪談？": "想了解使用者研究方法",
+        },
+      },
     ]);
     expect(JSON.parse(result)).toEqual({ created: 1, updated: 0, failed: [] });
+  });
+
+  it("passes sheet_name through to readSheetRows when provided", async () => {
+    const readSheetRows = vi.fn().mockResolvedValue([
+      { row_index: 2, columns: { Name: "Alice" }, current_tag: true },
+    ]);
+    const syncCandidatesToNotion = vi
+      .fn()
+      .mockResolvedValue({ created: 1, updated: 0, failed: [] });
+    const deps = makeDeps({ readSheetRows, syncCandidatesToNotion });
+
+    await executeTool(
+      "sync_to_notion",
+      {
+        candidates: [
+          { row_index: 2, name: "Alice", email: "alice@example.com", reason: "r" },
+        ],
+        sheet_name: "工作表2",
+      },
+      deps,
+    );
+
+    expect(readSheetRows).toHaveBeenCalledWith(undefined, "工作表2");
+  });
+
+  it("omits sheet_name when the caller does not specify one", async () => {
+    const readSheetRows = vi.fn().mockResolvedValue([
+      { row_index: 2, columns: { Name: "Alice" }, current_tag: true },
+    ]);
+    const syncCandidatesToNotion = vi
+      .fn()
+      .mockResolvedValue({ created: 1, updated: 0, failed: [] });
+    const deps = makeDeps({ readSheetRows, syncCandidatesToNotion });
+
+    await executeTool(
+      "sync_to_notion",
+      {
+        candidates: [
+          { row_index: 2, name: "Alice", email: "alice@example.com", reason: "r" },
+        ],
+      },
+      deps,
+    );
+
+    expect(readSheetRows).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it("reports a candidate as failed when its row can no longer be found on the sheet, without blocking others", async () => {
+    const readSheetRows = vi.fn().mockResolvedValue([
+      { row_index: 3, columns: { Name: "Bob", Tag: "TRUE", Reason: "r" }, current_tag: true },
+    ]);
+    const syncCandidatesToNotion = vi
+      .fn()
+      .mockResolvedValue({ created: 1, updated: 0, failed: [] });
+    const deps = makeDeps({ readSheetRows, syncCandidatesToNotion });
+
+    const result = await executeTool(
+      "sync_to_notion",
+      {
+        candidates: [
+          { row_index: 2, name: "Alice", email: "a@example.com", reason: "r" },
+          { row_index: 3, name: "Bob", email: "b@example.com", reason: "r" },
+        ],
+      },
+      deps,
+    );
+
+    expect(syncCandidatesToNotion).toHaveBeenCalledWith([
+      {
+        sourceRowIndex: 3,
+        name: "Bob",
+        email: "b@example.com",
+        reason: "r",
+        answers: { Name: "Bob" },
+      },
+    ]);
+    const parsed = JSON.parse(result);
+    expect(parsed.created).toBe(1);
+    expect(parsed.failed).toEqual([
+      { sourceRowIndex: 2, error: "找不到列 2，可能已從 Sheet 移除" },
+    ]);
   });
 });
 

@@ -24,6 +24,7 @@ vi.mock("@interview-platform/shared-integrations", () => ({
   readSheetRows: vi.fn(),
   writeSheetTags: vi.fn(),
   syncCandidatesToNotion: vi.fn(),
+  getSheetsConfig: vi.fn(),
   PENDING_INVITATION_STATUS: "已篩選待邀請",
   INVITED_STATUS: "已邀請",
 }));

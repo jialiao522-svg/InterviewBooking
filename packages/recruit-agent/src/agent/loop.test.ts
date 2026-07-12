@@ -70,4 +70,36 @@ describe("runTurn", () => {
     );
     expect(toolResultMessage).toBeDefined();
   });
+
+  it("does not call write_tags when the assistant summarizes tag decisions and asks for confirmation instead of writing back", async () => {
+    const readSheetRows = vi.fn().mockResolvedValue([
+      { row_index: 2, columns: { Name: "Alice" }, current_tag: null },
+    ]);
+    const writeSheetTags = vi.fn();
+
+    const client = fakeClient([
+      {
+        content: [
+          { type: "tool_use", id: "toolu_1", name: "get_sheet_rows", input: {} },
+        ],
+        stop_reason: "tool_use",
+      },
+      {
+        content: [
+          { type: "text", text: "符合 1 筆、不符合 0 筆。你對這個結果滿意嗎？" },
+        ],
+        stop_reason: "end_turn",
+      },
+    ]);
+
+    const result = await runTurn(
+      client,
+      [],
+      "篩選台大資工系的候選人",
+      makeDeps({ readSheetRows, writeSheetTags }),
+    );
+
+    expect(result.responseText).toBe("符合 1 筆、不符合 0 筆。你對這個結果滿意嗎？");
+    expect(writeSheetTags).not.toHaveBeenCalled();
+  });
 });
