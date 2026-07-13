@@ -20,11 +20,6 @@ vi.mock("@interview-platform/shared-integrations", () => ({
   ensureGmailAuthorized: mockEnsureGmailAuthorized,
   sendEmail: mockSendEmail,
   getBookingBaseUrl: mockGetBookingBaseUrl,
-  // Unused by this test but transitively required by ./agent/tools.ts
-  readSheetRows: vi.fn(),
-  writeSheetTags: vi.fn(),
-  syncCandidatesToNotion: vi.fn(),
-  getSheetsConfig: vi.fn(),
   PENDING_INVITATION_STATUS: "已篩選待邀請",
   INVITED_STATUS: "已邀請",
 }));

@@ -1,5 +1,3 @@
-import * as readline from "readline/promises";
-import Anthropic from "@anthropic-ai/sdk";
 import {
   queryCandidatesByStatus,
   updateCandidateStatus,
@@ -9,7 +7,6 @@ import {
   PENDING_INVITATION_STATUS,
   INVITED_STATUS,
 } from "@interview-platform/shared-integrations";
-import { runTurn } from "./agent/loop";
 
 export interface InviteDispatchResult {
   sent: number;
@@ -77,37 +74,16 @@ export async function dispatchInvites(): Promise<InviteDispatchResult> {
   return result;
 }
 
-async function runFilteringRepl(): Promise<void> {
-  const client = new Anthropic();
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  let messages: Anthropic.MessageParam[] = [];
-
-  // eslint-disable-next-line no-console
-  console.log("招募名單篩選助理已啟動。輸入篩選條件開始，或輸入 exit 離開。");
-
-  try {
-    while (true) {
-      const input = await rl.question("\n> ");
-      if (input.trim().toLowerCase() === "exit") {
-        break;
-      }
-      const result = await runTurn(client, messages, input);
-      messages = result.messages;
-      // eslint-disable-next-line no-console
-      console.log(`\n${result.responseText}`);
-    }
-  } finally {
-    rl.close();
-  }
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--invite")) {
     await dispatchInvites();
     return;
   }
-  await runFilteringRepl();
+  // eslint-disable-next-line no-console
+  console.log(
+    "招募名單篩選已改為 Claude Code skill：在 Claude Code 中呼叫 recruit-filter skill 進行對話式篩選。",
+  );
 }
 
 if (require.main === module) {

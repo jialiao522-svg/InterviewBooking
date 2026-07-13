@@ -6,6 +6,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspace=@interview-platform/shared-integrations && npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "invite": "npm run build --workspace=@interview-platform/recruit-agent && node --env-file=.env packages/recruit-agent/dist/index.js --invite"
   }
 }

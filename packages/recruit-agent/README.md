@@ -1,6 +1,6 @@
 # recruit-agent
 
-招募名單篩選終端機 Agent。透過對話式自然語言篩選 Google Sheet 上的原始名單，回寫標記，同步到 Notion，並可觸發邀請信發送。
+招募名單篩選與邀請信發送。篩選透過 Claude Code 的 `recruit-filter` skill 進行對話式自然語言篩選，回寫標記，同步到 Notion；邀請信發送則透過 `recruit-invite` skill（或直接執行 `npm run invite`）觸發。
 
 ## 一次性設定
 
@@ -38,8 +38,6 @@
 在專案根目錄建立 `.env`（或用其他方式匯出以下環境變數）：
 
 ```
-ANTHROPIC_API_KEY=...
-
 GOOGLE_SERVICE_ACCOUNT_KEY_PATH=/path/to/service-account.json
 GOOGLE_SHEET_ID=...
 # 以下為選填，有預設值
@@ -59,14 +57,28 @@ BOOKING_BASE_URL=https://your-booking-scheduler-domain.example.com
 
 ## 執行
 
+### 篩選（在 Claude Code 中）
+
+在 Claude Code 對話中呼叫 `recruit-filter` skill，描述篩選條件即可開始（例如「篩選出住在台北、有使用者研究經驗的候選人」）。這個 skill 底層透過 `packages/recruit-agent/src/cli.ts` 提供的 CLI wrapper 讀取/回寫 Google Sheet、同步 Notion，細節見 `.claude/skills/recruit-filter/SKILL.md`。
+
+若想直接呼叫 CLI wrapper（除錯用）：
+
 ```bash
 npm run build --workspace=@interview-platform/recruit-agent
 
-# 對話式篩選 REPL（--env-file 讓 Node 直接讀取根目錄的 .env，不需要額外安裝 dotenv）
-node --env-file=.env packages/recruit-agent/dist/index.js
-
-# 觸發邀請信發送（獨立指令，不進入 REPL）
-node --env-file=.env packages/recruit-agent/dist/index.js --invite
+node --env-file=.env packages/recruit-agent/dist/cli.js read-rows [--sheet-name <name>]
+node --env-file=.env packages/recruit-agent/dist/cli.js write-tags --rows '<json>' [--sheet-name <name>]
+node --env-file=.env packages/recruit-agent/dist/cli.js sync-notion --candidates '<json>' [--sheet-name <name>]
 ```
+
+### 發送邀請信
+
+在 Claude Code 對話中呼叫 `recruit-invite` skill，或直接在根目錄執行：
+
+```bash
+npm run invite
+```
+
+這個指令會先 build 本套件，再執行 `node --env-file=.env packages/recruit-agent/dist/index.js --invite`，查詢 Notion 上待邀請的候選人並寄送邀請信。
 
 > `--env-file` 是 Node.js 20.6+ 內建功能，本專案假設在 Node 20.6 以上執行。
