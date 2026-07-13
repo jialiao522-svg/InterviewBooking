@@ -3,7 +3,7 @@
 - [x] 1.1 建立 npm workspaces monorepo 骨架（根目錄 `package.json` 設定 `workspaces: ["packages/*"]`、`tsconfig.base.json`），並建立 `packages/shared-integrations` 與 `packages/recruit-agent` 兩個空白套件，對應「採用 Monorepo 架構，Google/Notion Client 邏輯抽成共用套件」的設計決策 — 驗證：於根目錄執行 `npm run build`（透過 workspaces 建置兩個套件），exit code 為 0
 - [x] 1.2 建立 Google Cloud 專案與 Service Account，並將測試用 Google Sheet 分享給該 service account 的 email — 驗證：使用 service account 憑證呼叫 Sheets API 讀取測試 Sheet，成功回傳資料
 - [x] 1.3 建立 Notion Internal Integration，並將測試用 Notion 資料庫分享給該 integration — 驗證：以 Integration Token 呼叫 Notion API 列出資料庫內容成功
-- [ ] 1.4 建立 Gmail OAuth 2.0 使用者授權用戶端設定（Google Cloud OAuth Client ID/Secret，桌面應用程式類型）— 驗證：於本機完成一次瀏覽器同意流程，成功取得並儲存 refresh token
+- [x] 1.4 建立 Gmail OAuth 2.0 使用者授權用戶端設定（Google Cloud OAuth Client ID/Secret，桌面應用程式類型）— 驗證：於本機完成一次瀏覽器同意流程，成功取得並儲存 refresh token
 
 ## 2. Claude Agent 核心迴圈與工具定義
 
@@ -17,8 +17,8 @@
 
 ## 4. 對話式自然語言篩選
 
-- [ ] 4.1 實作篩選邏輯，讓 Claude 依使用者自然語言條件為每列產生標記決定與理由，滿足 "Iterative natural-language filtering" 需求 — 驗證：輸入範例篩選條件後，確認回傳的標記結果與理由符合預期
-- [ ] 4.2 實作條件反覆調整時重新評估標記，不需使用者重述完整原始條件 — 驗證：模擬兩輪對話輸入（先寬後窄或先窄後寬），確認第二輪標記依整體對話脈絡正確調整
+- [x] 4.1 實作篩選邏輯，讓 Claude 依使用者自然語言條件為每列產生標記決定與理由，滿足 "Iterative natural-language filtering" 需求 — 驗證：輸入範例篩選條件後，確認回傳的標記結果與理由符合預期
+- [x] 4.2 實作條件反覆調整時重新評估標記，不需使用者重述完整原始條件 — 驗證：模擬兩輪對話輸入（先寬後窄或先窄後寬），確認第二輪標記依整體對話脈絡正確調整
 
 ## 5. 標記預覽確認與回寫 Google Sheet
 
