@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Slot } from "@/lib/slotAvailability";
+import BookingCalendar from "./BookingCalendar";
 
 interface BookingFormProps {
   candidateId: string;
@@ -25,16 +26,16 @@ function formatSlotLabel(slot: Slot): string {
 
 export default function BookingForm({ candidateId, initialSlots }: BookingFormProps) {
   const [slots, setSlots] = useState<Slot[]>(initialSlots);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
   const [needsRemote, setNeedsRemote] = useState(false);
   const [state, setState] = useState<SubmitState>({ status: "idle" });
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    if (selectedIndex === null) {
+    if (selectedSlot === null) {
       return;
     }
-    const slot = slots[selectedIndex];
+    const slot = selectedSlot;
     setState({ status: "submitting" });
 
     try {
@@ -54,7 +55,7 @@ export default function BookingForm({ candidateId, initialSlots }: BookingFormPr
         const data = await response.json();
         if (data.reason === "slot_taken") {
           setSlots(data.availableSlots ?? []);
-          setSelectedIndex(null);
+          setSelectedSlot(null);
           setState({ status: "conflict", message: "這個時段剛被別人訂走了，請重新選擇。" });
           return;
         }
@@ -70,42 +71,44 @@ export default function BookingForm({ candidateId, initialSlots }: BookingFormPr
 
   if (state.status === "booked") {
     return (
-      <p>
-        預約成功！時間：{formatSlotLabel({ start: state.start, end: state.end })}
-      </p>
+      <div className="rounded-card border border-foreground/10 p-6 shadow-card">
+        <p className="text-base font-medium text-foreground">
+          預約成功！時間：{formatSlotLabel({ start: state.start, end: state.end })}
+        </p>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      {state.status === "conflict" && <p role="alert">{state.message}</p>}
-      {state.status === "error" && <p role="alert">{state.message}</p>}
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {state.status === "conflict" && (
+        <p role="alert" className="rounded-card border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-brand">
+          {state.message}
+        </p>
+      )}
+      {state.status === "error" && (
+        <p role="alert" className="rounded-card border border-brand/30 bg-brand/5 px-4 py-3 text-sm text-brand">
+          {state.message}
+        </p>
+      )}
 
-      <fieldset>
-        <legend>選擇訪談時段</legend>
-        {slots.map((slot, index) => (
-          <label key={slot.start} style={{ display: "block" }}>
-            <input
-              type="radio"
-              name="slot"
-              checked={selectedIndex === index}
-              onChange={() => setSelectedIndex(index)}
-            />
-            {formatSlotLabel(slot)}
-          </label>
-        ))}
-      </fieldset>
+      <BookingCalendar slots={slots} selectedSlot={selectedSlot} onSelectSlot={setSelectedSlot} />
 
-      <label>
+      <label className="flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={needsRemote}
           onChange={(event) => setNeedsRemote(event.target.checked)}
+          className="h-4 w-4 accent-brand"
         />
         我需要線上參與
       </label>
 
-      <button type="submit" disabled={selectedIndex === null || state.status === "submitting"}>
+      <button
+        type="submit"
+        disabled={selectedSlot === null || state.status === "submitting"}
+        className="w-full rounded-full bg-brand px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-foreground/20"
+      >
         確認預約
       </button>
     </form>
