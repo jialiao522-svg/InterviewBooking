@@ -37,31 +37,35 @@ export default function BookingForm({ candidateId, initialSlots }: BookingFormPr
     const slot = slots[selectedIndex];
     setState({ status: "submitting" });
 
-    const response = await fetch(`/api/book/${candidateId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slotStart: slot.start, slotEnd: slot.end, needsRemote }),
-    });
+    try {
+      const response = await fetch(`/api/book/${candidateId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slotStart: slot.start, slotEnd: slot.end, needsRemote }),
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      setState({ status: "booked", start: data.start, end: data.end });
-      return;
-    }
-
-    if (response.status === 409) {
-      const data = await response.json();
-      if (data.reason === "slot_taken") {
-        setSlots(data.availableSlots ?? []);
-        setSelectedIndex(null);
-        setState({ status: "conflict", message: "這個時段剛被別人訂走了，請重新選擇。" });
+      if (response.ok) {
+        const data = await response.json();
+        setState({ status: "booked", start: data.start, end: data.end });
         return;
       }
-      setState({ status: "conflict", message: "這個候選人已經完成預約。" });
-      return;
-    }
 
-    setState({ status: "error", message: "預約時發生錯誤，請稍後再試。" });
+      if (response.status === 409) {
+        const data = await response.json();
+        if (data.reason === "slot_taken") {
+          setSlots(data.availableSlots ?? []);
+          setSelectedIndex(null);
+          setState({ status: "conflict", message: "這個時段剛被別人訂走了，請重新選擇。" });
+          return;
+        }
+        setState({ status: "conflict", message: "這個候選人已經完成預約。" });
+        return;
+      }
+
+      setState({ status: "error", message: "預約時發生錯誤，請稍後再試。" });
+    } catch {
+      setState({ status: "error", message: "預約時發生錯誤，請稍後再試。" });
+    }
   }
 
   if (state.status === "booked") {

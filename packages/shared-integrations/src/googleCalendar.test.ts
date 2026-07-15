@@ -1,22 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { mockFreebusyQuery, mockEventsInsert, mockGetClient, MockGoogleAuth } = vi.hoisted(() => {
-  const getClient = vi.fn().mockResolvedValue({});
-  class GoogleAuthStub {
-    getClient = getClient;
-  }
-  return {
-    mockFreebusyQuery: vi.fn(),
-    mockEventsInsert: vi.fn(),
-    mockGetClient: getClient,
-    MockGoogleAuth: GoogleAuthStub,
-  };
-});
+const { mockFreebusyQuery, mockEventsInsert, mockGetClient, mockSetCredentials, MockGoogleAuth, MockOAuth2 } =
+  vi.hoisted(() => {
+    const getClient = vi.fn().mockResolvedValue({});
+    const setCredentials = vi.fn();
+    class GoogleAuthStub {
+      getClient = getClient;
+    }
+    class OAuth2Stub {
+      setCredentials = setCredentials;
+    }
+    return {
+      mockFreebusyQuery: vi.fn(),
+      mockEventsInsert: vi.fn(),
+      mockGetClient: getClient,
+      mockSetCredentials: setCredentials,
+      MockGoogleAuth: GoogleAuthStub,
+      MockOAuth2: OAuth2Stub,
+    };
+  });
 
 vi.mock("googleapis", () => ({
   google: {
     auth: {
       GoogleAuth: MockGoogleAuth,
+      OAuth2: MockOAuth2,
     },
     calendar: vi.fn().mockReturnValue({
       freebusy: { query: mockFreebusyQuery },
@@ -36,16 +44,25 @@ vi.mock("fs", async (importOriginal) => {
 });
 
 import { queryFreeBusy, createCalendarEvent, CalendarAccessDeniedError } from "./googleCalendar";
-import type { CalendarConfig } from "./config";
+import type { CalendarConfig, GmailOAuthConfig } from "./config";
 
 const testConfig: CalendarConfig = {
   serviceAccountKeyPath: "/fake/key.json",
   calendarId: "interviewer@example.com",
 };
 
+const testOAuthConfig: GmailOAuthConfig = {
+  clientId: "test-client-id",
+  clientSecret: "test-client-secret",
+  tokenPath: "/fake/does-not-exist-token.json",
+};
+
 beforeEach(() => {
   mockFreebusyQuery.mockReset();
   mockEventsInsert.mockReset();
+  mockGetClient.mockClear();
+  mockSetCredentials.mockClear();
+  process.env.GMAIL_OAUTH_REFRESH_TOKEN = "test-refresh-token";
 });
 
 describe("queryFreeBusy", () => {
@@ -100,7 +117,7 @@ describe("queryFreeBusy", () => {
 });
 
 describe("createCalendarEvent", () => {
-  it("creates an event spanning the given slot with the candidate as an attendee", async () => {
+  it("creates an event spanning the given slot with the candidate as an attendee, authenticated as the OAuth account (not the service account)", async () => {
     mockEventsInsert.mockResolvedValue({ data: { id: "event-123" } });
 
     const result = await createCalendarEvent(
@@ -110,9 +127,14 @@ describe("createCalendarEvent", () => {
         attendeeEmail: "candidate@example.com",
       },
       testConfig,
+      testOAuthConfig,
     );
 
     expect(result).toEqual({ eventId: "event-123" });
+    expect(mockSetCredentials).toHaveBeenCalledWith(
+      expect.objectContaining({ refresh_token: "test-refresh-token" }),
+    );
+    expect(mockGetClient).not.toHaveBeenCalled();
     expect(mockEventsInsert).toHaveBeenCalledWith(
       expect.objectContaining({
         calendarId: "interviewer@example.com",

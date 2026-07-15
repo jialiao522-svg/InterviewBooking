@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import { google, calendar_v3 } from "googleapis";
-import { getCalendarConfig, CalendarConfig } from "./config";
+import { getCalendarConfig, CalendarConfig, getGmailOAuthConfig, GmailOAuthConfig } from "./config";
+import { getAuthorizedOAuthClient } from "./googleOAuth";
 
 export interface BusyPeriod {
   start: string;
@@ -81,11 +82,20 @@ export async function queryFreeBusy(
   }));
 }
 
+/**
+ * Creates the event as the real Google account behind the Gmail OAuth
+ * credentials, not the Calendar service account: Google rejects attendee
+ * invites from a bare service account without Workspace Domain-Wide
+ * Delegation, which a personal (non-Workspace) Google account can never
+ * grant.
+ */
 export async function createCalendarEvent(
   input: CreateEventInput,
   config: CalendarConfig = getCalendarConfig(),
+  oauthConfig: GmailOAuthConfig = getGmailOAuthConfig(),
 ): Promise<{ eventId: string }> {
-  const client = await getCalendarClient(config);
+  const auth = await getAuthorizedOAuthClient(oauthConfig);
+  const client = google.calendar({ version: "v3", auth });
 
   const event = await client.events.insert({
     calendarId: config.calendarId,
